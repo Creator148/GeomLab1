@@ -11,97 +11,323 @@
 #include "SFML/Graphics/RenderTexture.hpp"
 #include "SFML/System/Clock.hpp"
 #include "SFML/Window/Event.hpp"
+#include "string"
 
+using namespace sf;
 
-void HandleUserInput(sf::RenderWindow& window, const sf::Event& event)
+class Player
+{
+public:
+	Sprite sprite[9];
+	bool vision[9];
+
+	Player(Texture &image)
+	{
+		for (int i = 0; i < 9; i++)
+		{
+			sprite[i].setTexture(image);
+			vision[i] = false;
+		}
+		for (int i = 0; i < 3; i++)
+			for (int j = 0; j < 3; j++)
+				sprite[i * 3 + j].setPosition(160 * j, 160 * i);
+	}
+
+	void clear()
+	{
+		for (int i = 0; i < 9; ++i)
+		{
+			vision[i] = false;
+		}
+	}
+
+	void update(int &vid)
+	{
+		for (int i = 0; i < 9; i++)
+			sprite[i].setTextureRect(IntRect(160 * (vid - 1), 0, 160, 160));
+	}
+};
+
+//Textures
+Texture texturefield;
+Texture spriteTexture;
+Texture linetexture;
+Texture buttonBack;
+Texture replay;
+
+//Sprites
+Sprite line(linetexture);
+Sprite back(buttonBack);
+Sprite select[2];
+Sprite field(texturefield);
+Sprite rep(replay);
+
+//
+Player player1(spriteTexture);
+Player player2(spriteTexture);
+bool winplay[8][2];
+bool step = true;
+bool win = false;
+int sel = 0;
+int pointsplayer1 = 0;
+int pointsplayer2 = 0;
+
+Font font;
+
+void Replay(RenderWindow &window)
+{
+	window.clear(Color::White);
+	player1.clear();
+	player2.clear();
+	if (win)
+	{
+		if (step)
+			pointsplayer2 += 1;
+		else
+			pointsplayer1 += 1;
+	}
+	win = false;
+	step = true;
+	for (int i = 0; i < 8; i++)
+	{
+		for (int j = 0; j < 2; j++)
+		{
+			winplay[i][j] = false;
+		}
+	}
+	window.draw(field);
+}
+
+void HandleUserInput(sf::RenderWindow &window, const sf::Event &event)
 {
 	switch (event.type)
 	{
-	case sf::Event::Closed:
+	case Event::Closed:
 		window.close();
 		break;
+	case Event::MouseButtonPressed:
+		if (event.key.code == Mouse::Left)
+		{
+			if (rep.getGlobalBounds().contains(Mouse::getPosition(window).x, Mouse::getPosition(window).y))
+			{
+				Replay(window);
+			}
+			if (back.getGlobalBounds().contains(Mouse::getPosition(window).x, Mouse::getPosition(window).y))
+			{
+				sel = 0;
+				window.clear(Color::White);
+				player1.clear();
+				player2.clear();
+				pointsplayer1 = 0;
+				pointsplayer2 = 0;
+				win = false;
+				step = true;
+				for (int i = 0; i < 8; i++)
+				{
+					for (int j = 0; j < 2; j++)
+					{
+						winplay[i][j] = false;
+					}
+				}
+				window.draw(field);
+			}
+			if (sel == 0)
+			{
+				for (int i = 0; i < 2; i++)
+					if (select[i].getGlobalBounds().contains(Mouse::getPosition(window).x,
+															 Mouse::getPosition(window).y))
+						sel = i + 1; // 1=крест, 2=ноль
+			}
+			else if (step)
+			{
+				for (int i = 0; i < 9; i++)
+				{
+					if (player1.sprite[i].getGlobalBounds().contains(Mouse::getPosition(window).x,
+																	 Mouse::getPosition(window).y) &&
+						!player1.vision[i] && !player2.vision[i])
+					{
+						player1.vision[i] = true;
+						step = false;
+					}
+				}
+			}
+			else
+			{
+				for (int i = 0; i < 9; i++)
+				{
+					if (player2.sprite[i].getGlobalBounds().contains(Mouse::getPosition(window).x,
+																	 Mouse::getPosition(window).y) &&
+						!player1.vision[i] && !player2.vision[i])
+					{
+						player2.vision[i] = true;
+						step = true;
+					}
+				}
+			}
+		}
 	default:
 		break;
 	}
 }
 
-void Update(sf::RenderWindow& window, const sf::Time& deltaClock)
+void calculateVictory()
 {
-	// Make some time-dependent updates, like: physics, gameplay logic, animations, etc.
-}
-sf::Sprite sprite;
-sf::Texture spriteTexture;
-sf::Image spriteImage;
-
-void Render(sf::RenderWindow& window)
-{
-	// Draw some sfml/opengl items
-	static sf::CircleShape circle = []()
+	for (int i = 0; i < 8; i++)
 	{
-		sf::CircleShape circle;
-		circle.setRadius(50);
-		circle.setPosition(200, 200);
-		circle.setFillColor(sf::Color::White);
-		return circle;
-	}();
-	window.draw(circle);
-	window.draw(sprite);
+		if (i < 3)
+		{
+			winplay[i][0] = player1.vision[i * 3] && player1.vision[i * 3 + 1] && player1.vision[i * 3 + 2];
+			winplay[i][1] = player2.vision[i * 3] && player2.vision[i * 3 + 1] && player2.vision[i * 3 + 2];
+		}
+		else if (i >= 3 && i < 6)
+		{
+			winplay[i][0] = player1.vision[i - 3] && player1.vision[i] && player1.vision[i + 3];
+			winplay[i][1] = player2.vision[i - 3] && player2.vision[i] && player2.vision[i + 3];
+		}
+		else if (i >= 6)
+		{
+			winplay[i][0] = player1.vision[2 * (i - 6)] && player1.vision[4] && player1.vision[8 - 2 * (i - 6)];
+			winplay[i][1] = player2.vision[2 * (i - 6)] && player2.vision[4] && player2.vision[8 - 2 * (i - 6)];
+		}
+
+		for (int j = 0; j < 2; j++)
+		{
+			if (winplay[i][j])
+			{
+				win = true;
+				if (i < 3)
+				{
+					line.setTextureRect(IntRect(0, 3, 480, 10));
+					int ly = 80 + 160 * i;
+					line.setPosition(0, ly);
+				}
+				else if (i < 6)
+				{
+					line.setTextureRect(IntRect(0, 3, 480, 10));
+					line.setRotation(90);
+					int lx = 80 + 160 * (i - 3);
+					line.setPosition(lx, 0);
+				}
+				else if (i == 6)
+				{
+					line.setTextureRect(IntRect(3, 10, 480, 480));
+					line.setPosition(0, 0);
+				}
+				else if (i == 7)
+				{
+					line.setTextureRect(IntRect(480, 10, -480, 480));
+					line.setPosition(0, 0);
+				}
+			}
+		}
+	}
 }
 
-void RenderGui(sf::RenderWindow& window)
+Text setHello(String text)
 {
-	ImGui::Begin("Default window");
-	ImGui::End();
+	Text hello;
+	hello.setFont(font);
+	hello.setCharacterSize(50);
+	hello.setFillColor(sf::Color::Black);
+	hello.setStyle(sf::Text::Bold | sf::Text::Underlined);
+	hello.setString(text);
+	return hello;
 }
 
+Text setLeadership(String text)
+{
+	Text winners;
+	winners.setFont(font);
+	winners.setCharacterSize(50);
+	winners.setFillColor(sf::Color::Black);
+	winners.setStyle(sf::Text::Bold | sf::Text::Underlined);
+	winners.setString(text);
+	return winners;
+}
 
 int main()
 {
-	sf::RenderWindow window(sf::VideoMode(800, 800), "Geometry modeling 1");
+	replay.loadFromFile("./Source/Sprites/Replay.png");
+	texturefield.loadFromFile("./Source/Sprites/Field.png");
+	spriteTexture.loadFromFile("./Source/Sprites/Frame.png");
+	linetexture.loadFromFile("./Source/Sprites/Line.png");
+	buttonBack.loadFromFile("./Source/Sprites/Nazad.png");
+	font.loadFromFile("./Source/Sprites/Font.ttf");
+
+	field.setTextureRect(IntRect(0, 0, 480, 480));
+	back.setTextureRect(IntRect(0, 0, 150, 100));
+	rep.setTextureRect(IntRect(0, 0, 150, 150));
+
+	RenderWindow window(sf::VideoMode(800, 800), "Geometry modeling 1");
 	window.setFramerateLimit(60);
-	if (!ImGui::SFML::Init(window))
+
+	for (int i = 0; i < 2; i++)
 	{
-		std::cout << "ImGui initialization failed\n";
-		return -1;
+		select[i].setTexture(spriteTexture);
+		select[i].setPosition(240+160*i,320);
 	}
 
-	spriteImage.create(200, 200);
-	for (int x = 0; x < spriteImage.getSize().x; ++x)
-	{
-		for (int y = 0; y < spriteImage.getSize().y; ++y)
-		{
-			spriteImage.setPixel(x, y, sf::Color(rand()%255, rand()%255, rand()%255));
-		}	
-	}
+	
 
-	spriteTexture.loadFromImage(spriteImage);
-	sprite.setTexture(spriteTexture);
-	sprite.setPosition(400, 400);
-
-	sf::Clock deltaClock;
 	while (window.isOpen())
 	{
-		sf::Event event;
+		window.clear(Color::White);
+		Vector2i coursor = Mouse::getPosition(window);
+		Event event;
 		while (window.pollEvent(event))
 		{
-			ImGui::SFML::ProcessEvent(window, event);
 			HandleUserInput(window, event);
 		}
 
-		sf::Time deltaTime = deltaClock.restart();
-		ImGui::SFML::Update(window, deltaTime);
-		Update(window, deltaTime);
+		//выбор
+		for (int i = 0; i < 2; i++)
+		{
+			if (select[i].getGlobalBounds().contains(coursor.x, coursor.y))
+				select[i].setTextureRect(IntRect(160 * i, 160, 160, 160));
+			else
+				select[i].setTextureRect(IntRect(160 * i, 0, 160, 160));
+		}
+		
+		//вычисление победы
+		calculateVictory();
 
-		window.clear();
+		player1.update(sel);
+		int sel2 = sel + 1;
+		if (sel2 == 3)
+			sel2 = 1;
+		player2.update(sel2);
 
-		RenderGui(window);
-		Render(window);
-
-		ImGui::SFML::Render(window);
-
+		if (sel == 0){
+			Text hello = setHello("Its tic tac toe!");	
+			hello.setPosition(240, 240);
+			window.draw(hello);
+			for (int i = 0; i < 2; i++)
+				window.draw(select[i]);
+		}
+		else
+		{
+			back.setPosition(75, 530);
+			rep.setPosition(75, 650);
+			Text winners = setLeadership("Leadership\nPlayer 1:" + std::to_string(pointsplayer1) + "\n" +
+										 "Player 2:" + std::to_string(pointsplayer2));
+			winners.setPosition(490,10);
+			window.draw(field);
+			window.draw(back);
+			window.draw(rep);
+			window.draw(winners);
+			for (int i = 0; i < 9; i++)
+			{
+				if (player1.vision[i])
+					window.draw(player1.sprite[i]);
+				if (player2.vision[i])
+					window.draw(player2.sprite[i]);
+			}
+		}
+		if (win){
+			window.draw(line);
+			Replay(window);
+		}
 		window.display();
 	}
-	ImGui::SFML::Shutdown();
-
 	return 0;
 }
